@@ -97,9 +97,9 @@ app.UseRateLimiterMiddleware();
 // app.UseAuthorization();
 
 // Endpoints examples
-app.MapGet("/api/products/books", () => Results.Ok("📚 Books endpoint"));
-app.MapGet("/api/products/pencils", () => Results.Ok("✏️ Pencils endpoint"));
-app.MapGet("/ping", () => Results.Ok("pong 🏓"));
+app.MapGet("/api/products/books", () => Results.Ok("Books endpoint"));
+app.MapGet("/api/products/pencils", () => Results.Ok("Pencils endpoint"));
+app.MapGet("/ping", () => Results.Ok("pong"));
 
 app.Run();
 ```
