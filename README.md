@@ -1,59 +1,33 @@
-## Opis zahteva
+# RateLimiter
 
-Neophodno je kreirati **.NET Core** biblioteku `RateLimiter` koja implementira osnovne funkcionalnosti filtriranja pristupa endpoint-ima servisa na osnovu konfigurabilnih limita. Biblioteku struktuirati na način da se može postaviti na random **Nuget** repozitorijum, odnosno neophodno je da bude **u potpunosti self-contained**.
+Samostalna **middleware biblioteka za ograničavanje broja zahteva po IP adresi** u .NET 9, napravljena tako da se lako može ponovo iskoristiti ili objaviti na bilo kom **NuGet** repozitorijumu.
 
-## Funkcionalnosti
+Middleware ograničava broj zahteva na osnovu **IP adrese klijenta** i vraća status `429 Too Many Requests` kada klijent premaši dozvoljenu brzinu slanja zahteva.  
+Po želji se mogu podesiti i posebna ograničenja po endpoint-u.
 
-`RateLimiter` biblioteka u funkcionalnom pattern-u treba da predstavlja **middleware**, koji u middleware pipeline-u postoji pre *request-specific* middleware biblioteka koje zahtevaju poslovnu obradu request header-a (Auth, CORS itd.).
+---
 
-Osnovni kriterijum na osnovu koga će se vršiti ograničavanje zahteva je **dolazna IP adresa**, odnosno, svi limiti za pristup će se primenjivati na osnovu IP adrese sa koje dolazi zahtev.
+## Karakteristike
 
-Biblioteka treba da omogući:
+- **Globalno ograničenje po IP-u** — konfiguriše se broj zahteva i vremenski okvir  
+- **Opcionalna ograničenja po endpoint-u** („dodatni krediti“)  
+- Vraća **HTTP 429** kada se prekorači limit  
+- Nema zavisnosti — potpuno **samostalna**  
+- Jednostavna integracija putem **extension metoda**  
+- Kompatibilna sa **.NET 9**  
 
-#### Podrazumevani limit za sve endpoint-e
+---
 
-Potrebno je implementirati podrazumevani limit za pristup svim endpoint-ima servisa, i to:
+## Konfiguracija
 
-*   Limit na uzastopni broj zahteva sa iste IP adrese u podrazumevanom vremenskom okviru - `DefaultRequestLimitCount`,
-*   Podrazumevani vremenski okvir na broj zahteva sa iste IP adrese (u milisekundama)- `DefaultRequestLimitMs`,
-*   U slučaju prekoračenja limita, korisniku je potrebno vratiti grešku `429 - Too Many Requests`,
-*   **Nije potrebno** implementirati standardizaciju za rate-limit header polja (`Retry-After`, `X-Limit-` itd.)
-
-**Primer:**
-
-Za vrednosti `DefaultRequestLimitCount = 5` i `DefaultRequestLimitMs = 1000`, korisniku sa jedne IP adrese dozvoljeno je da u roku od **1 sekunde** pošalje **5 upita** ka endpoint-ima servisa.
-
-#### **Extra credits** - **nije neophodno za review biblioteke** - Limit za konkretan endpoint
-
-Potrebno je implementirati limit za pristup **konkretnom endpoint-u** servisa, i to:
-
-*   Limit na uzastopni broj zahteva sa iste IP adrese ka konkretnom endpoint-u u odgovarajućem vremenskom okviru - `RequestLimitCount`,
-*   Vremenski okvir na broj zahteva sa iste IP adrese ka konkretnom endpoint-u (u milisekundama)- `RequestLimitMs`,
-*   U slučaju prekoračenja limita, korisniku je potrebno vratiti grešku `429 - Too Many Requests`,
-*   **Nije potrebno** implementirati standardizaciju za rate-limit header polja (`Retry-After`, `X-Limit-` itd.)
-
-#### Konfiguracija servisa
-
-| Parametar                         | Opis                                                                  | Vrednost  |
-| --------------------------------- | --------------------------------------------------------------------- | --------- |
-| RequestLimiterEnabled             | Uključuje rate limiter funkcionalnosti                                | `boolean` |
-| DefaultRequestLimitMs             | Podrazumevani vremenski okvir na broj zahteva za sve endpoint-e       | `integer` |
-| DefaultRequestLimitCount          | Limit na uzastopni broj zahteva u vremenskom okviru za sve endpoint-e | `integer` |
-|                                   |                                                                       |           |
-| EndpointLimits*                   | Lista limita za konkretne endpoint-e                                  |           |
-| EndpointLimits/Endpoint*          | Putanja konkretnog endpoint-a                                         | `string`  |
-| EndpointLimits/RequestLimitMs*    | Podrazumevani vremenski okvir na broj zahteva za endpoint             | `integer` |
-| EndpointLimits/RequestLimitCount* | Limit na uzastopni broj zahteva u vremenskom okviru za endpoint       | `integer` |
-
-*Ukoliko se implementira _extra-credits_ zadatak
-
-**Primer konfiguracije:**
+U `appsettings` dodati sledeću sekciju (primer):
 
 ```json
 "RateLimiter": {
   "RequestLimiterEnabled": true,
   "DefaultRequestLimitMs": 1000,
   "DefaultRequestLimitCount": 10,
+  "RespectXForwardedFor": false,
   "EndpointLimits": [
     {
       "Endpoint": "/api/products/books",
@@ -69,12 +43,124 @@ Potrebno je implementirati limit za pristup **konkretnom endpoint-u** servisa, i
 }
 ```
 
-## Prerequisites za projekat
+### Parametri konfiguracije
 
-*   [.NET Core 9](https://dotnet.microsoft.com/download/dotnet/9.0),
-*   Adekvatan **README.md** sa opisom konfiguracije i načina inicijalizacije biblioteke u projekat
+| Parametar | Opis | Tip |
+|------------|------|------|
+| `RequestLimiterEnabled` | Uključuje/isključuje limiter globalno | `bool` |
+| `DefaultRequestLimitMs` | Vremenski okvir u milisekundama | `int` |
+| `DefaultRequestLimitCount` | Broj dozvoljenih zahteva u okviru tog perioda | `int` |
+| `RespectXForwardedFor` | Da li da koristi `X-Forwarded-For` heder za IP adresu klijenta | `bool` |
+| `XForwardedForHeaderName` | Naziv hedera za prosleđenu IP adresu (podrazumevano `"X-Forwarded-For"`) | `string` |
+| `EndpointLimits` | Lista opcionalnih ograničenja po endpoint-u | `array` |
+| `EndpointLimits[].Endpoint` | Putanja endpoint-a (tačno poklapanje) | `string` |
+| `EndpointLimits[].RequestLimitMs` | Vremenski okvir za taj endpoint | `int` |
+| `EndpointLimits[].RequestLimitCount` | Maksimalan broj zahteva po IP-u u okviru tog perioda | `int` |
 
-## Napomene
+---
 
-*   Zanemariti production-grade optimizacije, projekat će biti korišćen isključivo za potrebe valuacije kandidata,
-*   Оčekivano vreme za završetak zadatka - 4 radna sata
+## Instalacija
+
+Dodati biblioteku u projekat (preko NuGet-a ili lokalne reference):
+
+```bash
+dotnet add package RateLimiter
+```
+
+Ako se koristi lokalno, referencirati `.csproj` direktno:
+
+```xml
+<ProjectReference Include="..\RateLimiter\RateLimiter.csproj" />
+```
+
+---
+
+##  Primer upotrebe
+
+### **Program.cs**
+
+```csharp
+var builder = WebApplication.CreateBuilder(args);
+
+// 1️⃣ Register RateLimiter services
+builder.Services.AddRateLimiter(builder.Configuration);
+
+// 2️⃣ Build application
+var app = builder.Build();
+
+// 3️⃣ Use RateLimiter early in the pipeline
+app.UseRateLimiterMiddleware();
+
+// Other middlewares
+// app.UseCors();
+// app.UseAuthentication();
+// app.UseAuthorization();
+
+// Endpoints examples
+app.MapGet("/api/products/books", () => Results.Ok("📚 Books endpoint"));
+app.MapGet("/api/products/pencils", () => Results.Ok("✏️ Pencils endpoint"));
+app.MapGet("/ping", () => Results.Ok("pong 🏓"));
+
+app.Run();
+```
+
+---
+
+## Ponašanje
+
+### Primer:
+- `DefaultRequestLimitCount = 5`
+- `DefaultRequestLimitMs = 1000`
+
+ Jedna IP adresa može da pošalje **do 5 zahteva u sekundi** ka bilo kom endpoint-u.  
+Šesti zahtev u istom intervalu vratiće:
+
+```http
+HTTP/1.1 429 Too Many Requests
+```
+
+Dodatni hederi (npr. `Retry-After`) **nisu uključeni**, u skladu sa zahtevima zadatka.
+
+---
+
+## Tehnički pregled implementacije
+
+- **Middleware-first** pristup — registruje se pre poslovne logike  
+- **Ključ za limitiranje:** `IP|Scope` (scope = globalni ili putanja endpoint-a)  
+- **Thread-safe in-memory skladište:** koristi `ConcurrentDictionary<string, ConcurrentQueue<long>>`  
+- **Sliding window** pristup za praćenje zahteva  
+- **Bez eksternih zavisnosti** — nema Redis-a, baza podataka, ni dodatnih paketa  
+- Koristi samo: `Microsoft.AspNetCore.*` i `Microsoft.Extensions.*`
+
+---
+
+## Testiranje
+
+Za lokalno testiranje možeš koristiti alate poput Postman-a:
+
+Kada se premaši dozvoljeni broj zahteva, dobijaju se odgovori `429 Too Many Requests`.
+
+---
+
+## Struktura projekta (primer)
+
+```
+YourApp/
+ ├─ RateLimiter/                     # Biblioteka (ovaj paket)
+ │   ├─ Middleware/
+ │   ├─ Core/
+ │   ├─ Options/
+ │   ├─ Extensions/
+ │   └─ RateLimiter.csproj
+ └─ README.md
+```
+
+---
+
+## Napomene i ograničenja
+
+- Implementacija je **samo u memoriji** — limiter funkcioniše **po instanci aplikacije** (nije distribuiran).  
+  Za produkciju je preporučeno koristiti distribuirano skladište (Redis, SQL i sl.).
+- Poređenje putanja je **tačno** i **ne razlikuje mala/velika slova**.  
+  Po potrebi se može proširiti na prefix ili regex poklapanje.
+- Hederi za rate-limit (npr. `Retry-After`, `X-RateLimit-Limit`) nisu uključeni, u skladu sa zahtevima zadatka.
